@@ -1,0 +1,37 @@
+# Published diagnostic lab only. Repository Actions DISABLED; manual gate defaults OFF.
+# Only preflight is wired. A live credential/readiness bridge requires approval.
+name: ELMAVO C11.18 isolated safety preflight
+on:
+  workflow_dispatch:
+    inputs:
+      approved_preflight:
+        description: Approved isolated preflight only, no route or TTL changes
+        type: boolean
+        required: true
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: elmavo-c1118-staging-safety
+  cancel-in-progress: false
+jobs:
+  preflight:
+    # Free protected environments require a PUBLIC diagnostic-only lab.
+    # Publishing sanitized probe code requires separate approval; never copy
+    # the application repository. Private Free cannot silently skip protection.
+    if: ${{ inputs.approved_preflight && vars.ELMAVO_C1118_ENABLE == '1' && github.repository == vars.ELMAVO_C1118_REPOSITORY && github.event.repository.private == false }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: elmavo-c1118-staging
+    steps:
+      # Official checkout v4.2.2 SHA, re-review before future activation.
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Preparation only, no secrets or network
+        run: |
+          node -e 'const [major,minor]=process.versions.node.split(".").map(Number); if(major<22 || (major===22 && minor<18))process.exit(1)'
+          node prepare.mjs
+      # After a separate approval, wire runGithubHost to trusted CF ARM receipt,
+      # existing strictCloudSafetyTransport and fsync journal. No cron or opener.
+      # always() is useful cleanup, but cannot survive cancellation/runner loss.
