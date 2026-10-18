@@ -1,0 +1,55 @@
+{
+  "version": "elmavo.c1119.public-lab.v1",
+  "syntheticOnly": true,
+  "backendEnabled": false,
+  "realTargetsIncluded": false,
+  "regionalD1": "BLOCKED",
+  "requests": 0,
+  "files": [
+    {
+      "path": "prepare.mjs",
+      "sha256": "3900c99eedb4869b1f3be18725342c2e46ca5ff12e1dcdc895bfc713ecabdb85",
+      "bytes": 1705
+    },
+    {
+      "path": "github-host.mjs",
+      "sha256": "733b497f8294a02a892b5f2df7232d1f7d23aa6af0be5d64ca611ff0917acba7",
+      "bytes": 10827
+    },
+    {
+      "path": "cloud-safety.mjs",
+      "sha256": "3b0c02ec28cd8a59ed69ca7f35638e6218dca0978082f80fda44882c8c9e3355",
+      "bytes": 17467
+    },
+    {
+      "path": "cloud-collector.mjs",
+      "sha256": "c4ccd38dcb1df6e5c1320f120dc73c1d8acbc3c0e175130202bd67e606db32d8",
+      "bytes": 11033
+    },
+    {
+      "path": ".github/workflows/preflight.yml",
+      "sha256": "62480a4676bfcec105abcb01fc917307edaf38f6be7f68e10145dd7bc38e9b77",
+      "bytes": 1732
+    },
+    {
+      "path": "safety.wrangler.json.example",
+      "sha256": "fa98cbb4944f1545236bb1d5d5c03100aabdcb89c5c716da2d00f49e5c538e43",
+      "bytes": 1091
+    },
+    {
+      "path": "collector.wrangler.json.example",
+      "sha256": "1a07b698448a77e1842ad700e1d7b3671799231b975f64ec9a44b1dfee6b6201",
+      "bytes": 841
+    },
+    {
+      "path": ".gitignore",
+      "sha256": "bd8f3a6dcd1857c42396981f94987e62abc71509af9e2313ee91abb780565de5",
+      "bytes": 54
+    },
+    {
+      "path": "README.md",
+      "sha256": "94c0f5c03874d2eaaf13eb1b71c27bd0a84e4f58bc13e3df23bfafe90f84721f",
+      "bytes": 1507
+    }
+  ]
+}

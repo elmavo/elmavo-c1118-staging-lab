@@ -1,0 +1,7 @@
+.env*
+*.key
+*.pem
+*.p12
+*.db
+node_modules/
+.wrangler/

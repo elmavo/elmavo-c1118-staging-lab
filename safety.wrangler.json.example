@@ -1,0 +1,49 @@
+{
+  "name": "elmavo-stg-c1118-safety",
+  "account_id": "00000000000000000000000000000000",
+  "main": "./cloud-safety.mjs",
+  "compatibility_date": "2026-08-01",
+  "workers_dev": false,
+  "preview_urls": false,
+  "observability": {
+    "enabled": false
+  },
+  "vars": {
+    "ENTRY_ENABLED": "0",
+    "C1118_SAFETY_ENABLED": "0",
+    "SYNTHETIC_ONLY": "1",
+    "ACCOUNT_ID": "00000000000000000000000000000000",
+    "DATABASE_ID": "00000000-0000-4000-8000-000000000001",
+    "INSTALLATION_ID": "00000000-0000-4000-8000-000000000002",
+    "RUN_ID": "UNSET"
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "SAFETY",
+        "class_name": "C1118SafetyLedger"
+      }
+    ]
+  },
+  "services": [
+    {
+      "binding": "COLLECTOR",
+      "service": "elmavo-stg-c1118-collector"
+    }
+  ],
+  "migrations": [
+    {
+      "tag": "c1118-new-diagnostic-ledger-v1",
+      "new_sqlite_classes": [
+        "C1118SafetyLedger"
+      ]
+    }
+  ],
+  "workflows": [
+    {
+      "name": "elmavo-stg-c1118-deadman",
+      "binding": "DEADMAN",
+      "class_name": "C1118Deadman"
+    }
+  ]
+}
