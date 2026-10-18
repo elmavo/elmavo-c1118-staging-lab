@@ -1,0 +1,47 @@
+# LOCAL INACTIVE EXAMPLE. No publication, Actions activation, dispatch or secret.
+# Only the separately approved diagnostic repository may receive this package.
+name: ELMAVO fixed-deadline independent observer
+on:
+  workflow_dispatch:
+    inputs:
+      approved_run:
+        type: boolean
+        required: true
+        default: false
+      input_json:
+        description: Approved elmavo.c1125.job-input.v2 with fixed openedAt/expiresAt; no credentials
+        type: string
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: elmavo-c1118-staging-safety
+  cancel-in-progress: false
+jobs:
+  observer:
+    if: ${{ inputs.approved_run && vars.ELMAVO_C1123_ENABLE == '1' && github.repository == 'elmavo/elmavo-c1118-staging-lab' && github.event.repository.private == false && github.run_attempt == 1 }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    environment: elmavo-c1118-staging
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Independent read-only observer with fixed deadline
+        id: observe
+        env:
+          ELMAVO_C1123_ENABLE: ${{ vars.ELMAVO_C1123_ENABLE }}
+          ELMAVO_C1123_INPUT: ${{ inputs.input_json }}
+          ELMAVO_C1123_READ_TOKEN: ${{ secrets.ELMAVO_C1123_READ_TOKEN }}
+        run: |
+          set +x
+          node -e 'const [a,b]=process.versions.node.split(".").map(Number); if(a<22 || (a===22 && b<18))process.exit(1)'
+          node diagnostics/closed-observer-job.mjs --run-approved
+      - name: Preserve non-sensitive hash-chained audit
+        if: ${{ always() && steps.observe.outputs.audit-directory != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: closed-observer-audit
+          path: ${{ steps.observe.outputs.audit-directory }}
+          retention-days: 1
+          if-no-files-found: error
