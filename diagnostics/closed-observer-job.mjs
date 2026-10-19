@@ -259,10 +259,18 @@ function closedSafetyEvidence(kind, value, plan) {
   return Object.keys(plain).every((k) => seen.has(k)) && ["C1118_CLOSE_TOKEN", "SAFETY", "COLLECTOR", "DEADMAN"].every((k) => seen.has(k));
 }
 
+// test/support/cloudKillSwitchExercise.ts
+function independentClosedRun(value, now, cleanup = !1) {
+  let plan = twoHostRun(value, now, cleanup);
+  if (plan.githubRunId !== "0" || plan.githubRunAttempt !== 1 || plan.expiresAt - plan.openedAt !== 18e4 || plan.resourceExpiresAt - plan.resourceApprovedAt !== 9e5)
+    throw new Error("Independent closed plan refused");
+  return plan;
+}
+
 // test/support/closedGithubJob.ts
 var hash = (v) => typeof v == "string" && /^[a-f0-9]{40}$/.test(v);
 function context(value) {
-  return exactObject(value, ["repository", "runId", "runAttempt", "eventName", "actions", "runnerOs", "sha"]) && value.repository === "elmavo/elmavo-c1118-staging-lab" && value.actions === !0 && value.eventName === "workflow_dispatch" && value.runnerOs === "Linux" && typeof value.runId == "string" && /^[0-9]{1,20}$/.test(value.runId) && value.runAttempt === 1 && hash(value.sha);
+  return exactObject(value, ["repository", "runId", "runAttempt", "eventName", "actions", "runnerOs", "sha"]) && value.repository === "elmavo/elmavo-c1118-staging-lab" && value.actions === !0 && value.eventName === "workflow_dispatch" && value.runnerOs === "Linux" && typeof value.runId == "string" && /^[1-9][0-9]{0,19}$/.test(value.runId) && value.runAttempt === 1 && hash(value.sha);
 }
 function claimClosedGithubJournal(root, value, now) {
   let plan = twoHostRun(value, now);
@@ -280,6 +288,19 @@ function claimClosedGithubJournal(root, value, now) {
   return { directory, journal: createSafetyJournal(directory, planDigest(plan), "observer", plan.runId) };
 }
 function prepareClosedGithubPlan(value, gh, now) {
+  if (obj(value) && value.version === "elmavo.c1131.job-input.v3") {
+    if (!context(gh) || !exactObject(value, ["version", "plan", "planSha256", "expectedVersionId", "approvedCommitSha", "approved"]) || value.approved !== !0 || value.approvedCommitSha !== gh.sha || !recoveryUuid(value.expectedVersionId))
+      throw new Error("Independent observer input refused");
+    let plan2 = independentClosedRun(value.plan, now, !0);
+    if (value.planSha256 !== planDigest(plan2)) throw new Error("Independent plan digest refused");
+    return {
+      plan: plan2,
+      expectedVersionId: value.expectedVersionId,
+      approvedCommitSha: gh.sha,
+      planSha256: planDigest(plan2),
+      observerMode: "independent-closed-only"
+    };
+  }
   let fixed = obj(value) && value.version === "elmavo.c1125.job-input.v2";
   if (!context(gh) || !exactObject(value, [
     "version",
@@ -305,7 +326,13 @@ function prepareClosedGithubPlan(value, gh, now) {
     openedAt: fixed ? value.openedAt : now + 6e4,
     expiresAt: fixed ? value.expiresAt : now + 24e4
   }, now);
-  return { plan, expectedVersionId: value.expectedVersionId, approvedCommitSha: gh.sha, planSha256: planDigest(plan) };
+  return {
+    plan,
+    expectedVersionId: value.expectedVersionId,
+    approvedCommitSha: gh.sha,
+    planSha256: planDigest(plan),
+    observerMode: "legacy"
+  };
 }
 var obj = (v) => !!v && typeof v == "object" && !Array.isArray(v), decoded = (v) => typeof v == "string" && v.length <= 16384 ? JSON.parse(v) : v;
 function timestamp(v) {
@@ -328,7 +355,7 @@ function closedWorkflowEvidence(value, plan, version, now) {
     return "DENY";
   }
 }
-async function runClosedGithubJob(planValue, version, gh, ports) {
+async function runClosedGithubJob(planValue, version, gh, ports, mode = "legacy") {
   let metadataRequests = 0, observerRequests = 0, inspectionRequests = 0, auditOK = !0, result = (status) => ({
     status,
     metadataRequests,
@@ -341,10 +368,10 @@ async function runClosedGithubJob(planValue, version, gh, ports) {
     routeTransitionVerified: !1,
     regionalD1: "BLOCKED"
   });
-  if (!ports || !ports.credentialAvailable || typeof ports.inspect != "function" || !context(gh) || !recoveryUuid(version)) return result("DENY");
+  if (!ports || !ports.credentialAvailable || typeof ports.inspect != "function" || !context(gh) || !recoveryUuid(version) || !["legacy", "independent-closed-only"].includes(mode)) return result("DENY");
   try {
-    let start = ports.clock.wall(), mono = ports.clock.monotonic(), now = () => Math.ceil(Math.max(ports.clock.wall(), start + ports.clock.monotonic() - mono)), plan = twoHostRun(planValue, now());
-    if (plan.githubRunId !== gh.runId || plan.githubRunAttempt !== gh.runAttempt || plan.expiresAt - plan.openedAt !== 18e4 || plan.resourceExpiresAt - plan.resourceApprovedAt !== 9e5)
+    let start = ports.clock.wall(), mono = ports.clock.monotonic(), now = () => Math.ceil(Math.max(ports.clock.wall(), start + ports.clock.monotonic() - mono)), independent = mode === "independent-closed-only", plan = independent ? independentClosedRun(planValue, now()) : twoHostRun(planValue, now());
+    if (!independent && (plan.githubRunId !== gh.runId || plan.githubRunAttempt !== gh.runAttempt) || plan.expiresAt - plan.openedAt !== 18e4 || plan.resourceExpiresAt - plan.resourceApprovedAt !== 9e5)
       return result("DENY");
     let audit = { append(e) {
       try {
@@ -387,15 +414,15 @@ async function runClosedGithubJob(planValue, version, gh, ports) {
       } catch {
         return "WAIT";
       }
-    }, armed = !1;
-    for (let i = 0; i < 4 && now() < plan.expiresAt - TWO_HOST.cloudCloseLeadMs; i++) {
+    }, armed = !1, armEvidenceUntil = independent ? plan.expiresAt : plan.expiresAt - TWO_HOST.cloudCloseLeadMs;
+    for (let i = 0; i < 4 && now() < armEvidenceUntil; i++) {
       let state = await metadata();
       if (state === "DENY") return finish("BLOCKED");
       if (state === "ARMED" || state === "COMPLETE") {
         armed = !0;
         break;
       }
-      await ports.clock.sleep(Math.min(3e4, Math.max(0, plan.expiresAt - TWO_HOST.cloudCloseLeadMs - now())));
+      await ports.clock.sleep(Math.min(3e4, Math.max(0, armEvidenceUntil - now())));
     }
     if (!armed) return finish("BLOCKED");
     let observed = await runClosedKillSwitchObserver(plan, {
@@ -520,9 +547,23 @@ async function main() {
     runnerOs: process.env.RUNNER_OS ?? "",
     sha: process.env.GITHUB_SHA ?? ""
   }, draft = JSON.parse(input);
-  if (!draft || typeof draft != "object" || !("version" in draft) || draft.version !== "elmavo.c1125.job-input.v2")
+  if (!draft || typeof draft != "object" || !("version" in draft) || !["elmavo.c1125.job-input.v2", "elmavo.c1131.job-input.v3"].includes(String(draft.version)))
     throw new Error("Fixed deadline required");
-  let prepared = prepareClosedGithubPlan(draft, gh, Date.now()), root = process.env.RUNNER_TEMP;
+  let prepared = prepareClosedGithubPlan(draft, gh, Date.now());
+  if (prepared.observerMode === "independent-closed-only" && Date.now() >= prepared.plan.expiresAt) {
+    process.stdout.write(JSON.stringify({
+      status: "BLOCKED",
+      code: "DEADLINE_MISSED",
+      requests: 0,
+      data: null,
+      cloudExecutionVerified: !1,
+      routeTransitionVerified: !1,
+      regionalD1: "BLOCKED"
+    }) + `
+`), process.exitCode = 1;
+    return;
+  }
+  let root = process.env.RUNNER_TEMP;
   if (!root) throw new Error("Private audit root required");
   let { directory, journal } = claimClosedGithubJournal(root, prepared.plan, Date.now()), read = strictCloudSafetyTransport("observer", credential), metadata = strictWorkflowObserverTransport(credential, prepared.plan.runId), inspection = strictClosedInspectionTransport(credential);
   try {
@@ -534,8 +575,9 @@ async function main() {
       clock: { wall: () => Date.now(), monotonic: () => performance.now(), sleep: (ms) => new Promise((r) => setTimeout(r, ms)) },
       ready(plan) {
         process.stdout.write(JSON.stringify({
-          status: "JOB_READY_NOT_CLOUD_ARMED",
+          status: prepared.observerMode === "independent-closed-only" ? "OBSERVER_ATTACHED_NOT_A_SAFETY_GATE" : "JOB_READY_NOT_CLOUD_ARMED",
           plan,
+          observerExecution: { runId: gh.runId, attempt: gh.runAttempt, sha: gh.sha },
           expectedVersionId: prepared.expectedVersionId,
           planSha256: prepared.planSha256
         }) + `
@@ -544,7 +586,7 @@ async function main() {
       workflow: async () => ({ response: await metadata(), tlsVerified: !0 }),
       inspect: async (kind) => ({ response: await inspection(kind), tlsVerified: !0 }),
       observe: async (kind) => ({ response: await read({ kind }), tlsVerified: !0 })
-    });
+    }, prepared.observerMode);
     process.stdout.write(JSON.stringify(result) + `
 `), result.status !== "EVIDENCE_CONSISTENT" && (process.exitCode = 1);
   } finally {

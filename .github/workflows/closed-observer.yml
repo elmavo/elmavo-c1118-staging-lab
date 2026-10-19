@@ -1,6 +1,6 @@
 # LOCAL INACTIVE EXAMPLE. No publication, Actions activation, dispatch or secret.
 # Only the separately approved diagnostic repository may receive this package.
-name: ELMAVO fixed-deadline independent observer
+name: ELMAVO detached closed-only observer
 on:
   workflow_dispatch:
     inputs:
@@ -9,7 +9,7 @@ on:
         required: true
         default: false
       input_json:
-        description: Approved elmavo.c1125.job-input.v2 with fixed openedAt/expiresAt; no credentials
+        description: Approved elmavo.c1131.job-input.v3 with immutable plan and digest; no credentials
         type: string
         required: true
 permissions:
@@ -27,7 +27,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
-      - name: Independent read-only observer with fixed deadline
+      - name: Read-only observation; never a prerequisite for Cloudflare closure
         id: observe
         env:
           ELMAVO_C1123_ENABLE: ${{ vars.ELMAVO_C1123_ENABLE }}
